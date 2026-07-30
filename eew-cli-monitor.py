@@ -336,10 +336,10 @@ def add_location_rows(rows, lat, lon, mag):
 
     p_sec, s_sec = calc_wave_arrival(dist)
     if p_sec is not None:
-        p_label = "P波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0) else "P波到达"
+        p_label = "P波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0 and mag >= NO_SENSATION_MAG_THRESHOLD) else "P波到达"
         rows.append([p_label, f"{p_sec}秒"])
     if s_sec is not None:
-        s_label = "S波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0) else "S波到达"
+        s_label = "S波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0 and mag >= NO_SENSATION_MAG_THRESHOLD) else "S波到达"
         rows.append([s_label, f"{s_sec}秒"])
 
     show_epicenter_map(lat, lon, mag)
@@ -657,7 +657,7 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
         _restore_volume()
 
     # Windows通知
-    no_sense = (local_intensity is not None and local_intensity == 0)
+    no_sense = (local_intensity is not None and local_intensity == 0 and magnitude >= NO_SENSATION_MAG_THRESHOLD)
     if no_sense and not NO_SENSATION_REPORT:
         pass
     elif no_sense and NO_SENSATION_REPORT:
@@ -727,6 +727,7 @@ def build_default_config():
         'alert': {
             'bark_url': None,
             'no_sensation_report': False,
+            'no_sensation_mag_threshold': 4.5,
             'tiers': {
                 'tier1': {'min': 1.0, 'max': 2.0, 'windows': True, 'bark': True},
                 'tier2': {'min': 2.0, 'max': 3.0, 'windows': True, 'bark': True},
@@ -794,7 +795,7 @@ def get_location_by_ip():
 
 def setup_wizard():
     global SOURCE_CONFIG, FILTER_DETAIL, USER_LOCATION_NAME, USER_LATITUDE, USER_LONGITUDE
-    global ALERT_BARK_URL, ALERT_TIERS, DEBUG, EXPORT_FILE_PATH, EXPORT_ENABLED, NO_SENSATION_REPORT
+    global ALERT_BARK_URL, ALERT_TIERS, DEBUG, EXPORT_FILE_PATH, EXPORT_ENABLED, NO_SENSATION_REPORT, NO_SENSATION_MAG_THRESHOLD
 
     console.print("\n[bold cyan]========== 交互式配置向导 ==========[/bold cyan]")
     console.print("[dim]请根据提示依次完成配置，直接回车使用默认值[/dim]")
@@ -899,6 +900,13 @@ def setup_wizard():
     console.print("[dim]烈度为 0 的无感地震是否通过 Windows 弹窗和 Bark 推送进行通报？[/dim]")
     ns_answer = Prompt.ask("  是否开启无震感地震信息通报？", choices=['y', 'n'], default='y' if NO_SENSATION_REPORT else 'n')
     NO_SENSATION_REPORT = (ns_answer == 'y')
+    if NO_SENSATION_REPORT:
+        default_mag = str(NO_SENSATION_MAG_THRESHOLD)
+        mag_input = Prompt.ask("  无感地震最小震级（仅通报 ≥ 该震级的无感地震）", default=default_mag)
+        try:
+            NO_SENSATION_MAG_THRESHOLD = float(mag_input)
+        except ValueError:
+            NO_SENSATION_MAG_THRESHOLD = 4.5
 
     # ---------- 8. 保存 ----------
     save_config()
@@ -920,6 +928,7 @@ def save_config():
         'alert': {
             'bark_url': ALERT_BARK_URL,
             'no_sensation_report': NO_SENSATION_REPORT,
+            'no_sensation_mag_threshold': NO_SENSATION_MAG_THRESHOLD,
             'tiers': {k: dict(v) for k, v in ALERT_TIERS.items()}
         }
     }
@@ -942,7 +951,7 @@ def save_config():
 def apply_config(config):
     global SOURCE_CONFIG, FILTER_DETAIL, EXPORT_FILE_PATH, FAN_RECONNECT_DELAY, DEBUG
     global USER_LOCATION_NAME, USER_LATITUDE, USER_LONGITUDE
-    global ALERT_BARK_URL, ALERT_TIERS, NO_SENSATION_REPORT
+    global ALERT_BARK_URL, ALERT_TIERS, NO_SENSATION_REPORT, NO_SENSATION_MAG_THRESHOLD
     sources_cfg = config.get('sources', {})
     for key, src_cfg in sources_cfg.items():
         if key in SOURCE_CONFIG:
@@ -980,6 +989,7 @@ def apply_config(config):
     alert_cfg = config.get('alert', {})
     ALERT_BARK_URL = alert_cfg.get('bark_url') or None
     NO_SENSATION_REPORT = alert_cfg.get('no_sensation_report', False)
+    NO_SENSATION_MAG_THRESHOLD = alert_cfg.get('no_sensation_mag_threshold', 4.5)
     ALERT_TIERS = alert_cfg.get('tiers', {})
     if DEBUG:
         console.print(f"[dim][DEBUG] 预警配置: bark_url={'已设置' if ALERT_BARK_URL else '未设置'}, tiers={list(ALERT_TIERS.keys())}[/dim]")
@@ -1115,6 +1125,7 @@ USER_LONGITUDE = None
 ALERT_BARK_URL = None
 ALERT_TIERS = {}
 NO_SENSATION_REPORT = False
+NO_SENSATION_MAG_THRESHOLD = 4.5
 BARK_COUNTDOWN_THREADS = {}
 
 # 动态P/S波倒计时管理
@@ -3064,7 +3075,7 @@ def main():
     bark_txt = ALERT_BARK_URL if ALERT_BARK_URL else "未设置"
     console.print(f"Bark地址:  {bark_txt}")
 
-    ns_txt = '开启' if NO_SENSATION_REPORT else '关闭'
+    ns_txt = f"开启 (≥M{NO_SENSATION_MAG_THRESHOLD})" if NO_SENSATION_REPORT else '关闭'
     console.print(f"无震感地震通报:  {ns_txt}")
 
     if ALERT_TIERS:
