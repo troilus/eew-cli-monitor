@@ -657,7 +657,7 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
     # Windows通知
     win_msg = (f"{origin_time} {origin_name} 深度{depth}km M{magnitude}级 烈度{local_intensity}\n"
                f"P波 {p_seconds}秒后到达 | S波 {s_seconds}秒后到达\n"
-               f"到达{loc_name}距离{distance_km:.0f}km，预估本地烈度{local_intensity}\n"
+               f"到达{loc_name}距离{distance_km:.0f}km，订阅位置预估烈度{local_intensity}\n"
                f"信号源: {source_label}")
     show_windows_notification(f"地震预警预计烈度{local_intensity}", win_msg)
 
@@ -668,23 +668,23 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
         title_base = f"地震预警 {origin_name}"
         if tier is None or tier == -1 or tier == 0:
             send_bark(
-                title=f"{title_base} {p_seconds}秒后到达",
-                subtitle=f"预计烈度 {local_intensity}",
+                title=f"{title_base} {s_seconds}秒后到达",
+                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
                 body=f"距离震中 {distance_km:.0f}km，S波预计 {s_seconds}秒后到达，信号源: {source_label}",
                 level="passive"
             )
         elif tier == 1:
             send_bark(
-                title=f"{title_base} {p_seconds}秒后到达",
-                subtitle=f"震级 M{magnitude} 深度 {depth}km，预估烈度 {local_intensity}",
-                body=f"预计 {p_seconds}秒后到达 信号源: {source_label}",
+                title=f"{title_base} {s_seconds}秒后到达",
+                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
+                body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
                 level="active"
             )
         elif tier >= 2:
             send_bark(
-                title=f"{title_base} {p_seconds}秒后到达",
-                subtitle=f"震级 M{magnitude} 深度 {depth}km，预估烈度 {local_intensity}",
-                body=f"预计 {p_seconds}秒后到达 信号源: {source_label}",
+                title=f"{title_base} {s_seconds}秒后到达",
+                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
+                body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
                 level="critical",
                 volume=10, call="1", sound="alarm"
             )
