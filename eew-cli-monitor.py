@@ -815,10 +815,12 @@ def setup_wizard():
     if use_ip:
         USER_LATITUDE = ip_lat
         USER_LONGITUDE = ip_lon
-        USER_LOCATION_NAME = ip_city or Prompt.ask("  请输入位置名称", default="未设置")
+        USER_LOCATION_NAME = ip_city or Prompt.ask("  请输入位置名称", default=USER_LOCATION_NAME or "未设置")
     else:
-        lat_str = Prompt.ask("  请输入纬度 (latitude)", default=str(ip_lat) if ip_lat is not None else "30.0")
-        lon_str = Prompt.ask("  请输入经度 (longitude)", default=str(ip_lon) if ip_lon is not None else "120.0")
+        lat_default = str(USER_LATITUDE) if USER_LATITUDE is not None else (str(ip_lat) if ip_lat is not None else "30.0")
+        lon_default = str(USER_LONGITUDE) if USER_LONGITUDE is not None else (str(ip_lon) if ip_lon is not None else "120.0")
+        lat_str = Prompt.ask("  请输入纬度 (latitude)", default=lat_default)
+        lon_str = Prompt.ask("  请输入经度 (longitude)", default=lon_default)
         try:
             USER_LATITUDE = float(lat_str)
         except ValueError:
@@ -827,13 +829,13 @@ def setup_wizard():
             USER_LONGITUDE = float(lon_str)
         except ValueError:
             USER_LONGITUDE = None
-        USER_LOCATION_NAME = Prompt.ask("  请输入位置名称（如城市名）", default="未设置")
+        USER_LOCATION_NAME = Prompt.ask("  请输入位置名称（如城市名）", default=USER_LOCATION_NAME or "未设置")
 
     # ---------- 2. Bark URL ----------
     console.print("\n[bold]--- Bark 推送设置 ---[/bold]")
     console.print("[dim]Bark 是一个 iOS 推送工具，可在 App Store 获取[/dim]")
     console.print("[dim]例如: https://api.day.app/YourKey/[/dim]")
-    bark_input = Prompt.ask("  请输入 Bark 推送 URL（留空则不设置）", default="")
+    bark_input = Prompt.ask("  请输入 Bark 推送 URL（留空则不设置）", default=ALERT_BARK_URL or "")
     ALERT_BARK_URL = bark_input.strip() or None
 
     # ---------- 3. 数据源 ----------
@@ -865,22 +867,23 @@ def setup_wizard():
     # ---------- 6. 预警分级 ----------
     console.print("\n[bold]--- 预警分级设置 ---[/bold]")
     console.print("[dim]按烈度(估值)范围分级，各分级可分别控制 Windows 弹窗和 Bark 推送[/dim]")
-    default_tiers = {
+    default_tiers = ALERT_TIERS if ALERT_TIERS else {
         'tier1': {'min': 1.0, 'max': 2.0, 'windows': True, 'bark': True},
         'tier2': {'min': 2.0, 'max': 3.0, 'windows': True, 'bark': True},
         'tier3': {'min': 3.0, 'max': 12.0, 'windows': True, 'bark': True},
     }
-    use_default_tiers = Prompt.ask("  使用默认预警分级（tier1:1-2级, tier2:2-3级, tier3:3级以上，全部开启 Windows 和 Bark）", choices=['y', 'n'], default='y')
+    use_default_tiers = Prompt.ask("  使用当前预警分级设置？", choices=['y', 'n'], default='y')
     if use_default_tiers == 'y':
         ALERT_TIERS = default_tiers
     else:
         ALERT_TIERS = {}
         for i in range(1, 4):
             key = f'tier{i}'
-            min_val = Prompt.ask(f"  {key} 最小烈度", default=str(default_tiers[key]['min']))
-            max_val = Prompt.ask(f"  {key} 最大烈度（留空表示不限制）", default=str(default_tiers[key].get('max', '')))
-            win = Prompt.ask(f"  {key} 启用 Windows 弹窗", choices=['y', 'n'], default='y')
-            bark = Prompt.ask(f"  {key} 启用 Bark 推送", choices=['y', 'n'], default='y')
+            cur = default_tiers.get(key, {})
+            min_val = Prompt.ask(f"  {key} 最小烈度", default=str(cur.get('min', 1.0)))
+            max_val = Prompt.ask(f"  {key} 最大烈度（留空表示不限制）", default=str(cur.get('max', '')))
+            win = Prompt.ask(f"  {key} 启用 Windows 弹窗", choices=['y', 'n'], default='y' if cur.get('windows', True) else 'n')
+            bark = Prompt.ask(f"  {key} 启用 Bark 推送", choices=['y', 'n'], default='y' if cur.get('bark', True) else 'n')
             tier_cfg = {'min': float(min_val), 'windows': (win == 'y'), 'bark': (bark == 'y')}
             if max_val.strip():
                 tier_cfg['max'] = float(max_val)
@@ -888,13 +891,13 @@ def setup_wizard():
 
     # ---------- 7. 调试模式 ----------
     console.print("\n[bold]--- 调试模式 ---[/bold]")
-    debug_answer = Prompt.ask("  开启调试模式？", choices=['y', 'n'], default='n')
+    debug_answer = Prompt.ask("  开启调试模式？", choices=['y', 'n'], default='y' if DEBUG else 'n')
     DEBUG = (debug_answer == 'y')
 
     # ---------- 7.5 无震感地震通报 ----------
     console.print("\n[bold]--- 无震感地震通报 ---[/bold]")
     console.print("[dim]烈度为 0 的无感地震是否通过 Windows 弹窗和 Bark 推送进行通报？[/dim]")
-    ns_answer = Prompt.ask("  是否开启无震感地震信息通报？", choices=['y', 'n'], default='n')
+    ns_answer = Prompt.ask("  是否开启无震感地震信息通报？", choices=['y', 'n'], default='y' if NO_SENSATION_REPORT else 'n')
     NO_SENSATION_REPORT = (ns_answer == 'y')
 
     # ---------- 8. 保存 ----------
@@ -1058,7 +1061,7 @@ FILTER_DETAIL = {
         'sc': True,
         'fj': True,
         'cq': True,
-        'cenc_eqlist': False
+        'cenc_eqlist': True
     },
     'p2p': {
         'jma': False
