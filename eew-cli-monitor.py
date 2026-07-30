@@ -336,9 +336,11 @@ def add_location_rows(rows, lat, lon, mag):
 
     p_sec, s_sec = calc_wave_arrival(dist)
     if p_sec is not None:
-        rows.append(["P波到达", f"{p_sec}秒"])
+        p_label = "P波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0) else "P波到达"
+        rows.append([p_label, f"{p_sec}秒"])
     if s_sec is not None:
-        rows.append(["S波到达", f"{s_sec}秒"])
+        s_label = "S波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0) else "S波到达"
+        rows.append([s_label, f"{s_sec}秒"])
 
     show_epicenter_map(lat, lon, mag)
     return True
@@ -655,39 +657,60 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
         _restore_volume()
 
     # Windows通知
-    win_msg = (f"{origin_time} {origin_name} 深度{depth}km M{magnitude}级 烈度{local_intensity}\n"
-               f"P波 {p_seconds}秒后到达 | S波 {s_seconds}秒后到达\n"
-               f"到达{loc_name}距离{distance_km:.0f}km，订阅位置预估烈度{local_intensity}\n"
-               f"信号源: {source_label}")
-    show_windows_notification(f"地震预警预计烈度{local_intensity}", win_msg)
+    no_sense = (local_intensity is not None and local_intensity == 0)
+    if no_sense and not NO_SENSATION_REPORT:
+        pass
+    elif no_sense and NO_SENSATION_REPORT:
+        win_msg = (f"{origin_time} {origin_name} 深度{depth}km M{magnitude}级\n"
+                   f"P波传播时间 {p_seconds}秒 | S波传播时间 {s_seconds}秒\n"
+                   f"距离{distance_km:.0f}km (距{loc_name})，订阅位置预估烈度0\n"
+                   f"信号源: {source_label}")
+        show_windows_notification("无感地震通报", win_msg)
+    else:
+        win_msg = (f"{origin_time} {origin_name} 深度{depth}km M{magnitude}级 烈度{local_intensity}\n"
+                   f"P波 {p_seconds}秒后到达 | S波 {s_seconds}秒后到达\n"
+                   f"到达{loc_name}距离{distance_km:.0f}km，订阅位置预估烈度{local_intensity}\n"
+                   f"信号源: {source_label}")
+        show_windows_notification(f"地震预警预计烈度{local_intensity}", win_msg)
 
     # Bark
-    tier_cfg = tiers_config.get(f'tier{tier}', {}) if tier is not None and tier > 0 else {}
-    bark_enabled = tier_cfg.get('bark', True) if tier is not None and tier > 0 else True
-    if ALERT_BARK_URL and bark_enabled:
-        title_base = f"地震预警 {origin_name}"
-        if tier is None or tier == -1 or tier == 0:
+    if no_sense and not NO_SENSATION_REPORT:
+        pass
+    elif no_sense and NO_SENSATION_REPORT:
+        if ALERT_BARK_URL:
             send_bark(
-                title=f"{title_base} {s_seconds}秒后到达",
-                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
-                body=f"距离震中 {distance_km:.0f}km，S波预计 {s_seconds}秒后到达，信号源: {source_label}",
+                title="无感地震通报",
+                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 0",
+                body=f"距离震中 {distance_km:.0f}km，P波传播时间 {p_seconds}秒 | S波传播时间 {s_seconds}秒，信号源: {source_label}",
                 level="passive"
             )
-        elif tier == 1:
-            send_bark(
-                title=f"{title_base} {s_seconds}秒后到达",
-                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
-                body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
-                level="active"
-            )
-        elif tier >= 2:
-            send_bark(
-                title=f"{title_base} {s_seconds}秒后到达",
-                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
-                body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
-                level="critical",
-                volume=10, call="1", sound="alarm"
-            )
+    else:
+        tier_cfg = tiers_config.get(f'tier{tier}', {}) if tier is not None and tier > 0 else {}
+        bark_enabled = tier_cfg.get('bark', True) if tier is not None and tier > 0 else True
+        if ALERT_BARK_URL and bark_enabled:
+            title_base = f"地震预警 {origin_name}"
+            if tier is None or tier == -1 or tier == 0:
+                send_bark(
+                    title=f"{title_base} {s_seconds}秒后到达",
+                    subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
+                    body=f"距离震中 {distance_km:.0f}km，S波预计 {s_seconds}秒后到达，信号源: {source_label}",
+                    level="passive"
+                )
+            elif tier == 1:
+                send_bark(
+                    title=f"{title_base} {s_seconds}秒后到达",
+                    subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
+                    body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
+                    level="active"
+                )
+            elif tier >= 2:
+                send_bark(
+                    title=f"{title_base} {s_seconds}秒后到达",
+                    subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
+                    body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
+                    level="critical",
+                    volume=10, call="1", sound="alarm"
+                )
 
 
 # ================== 配置文件路径（持久化） ==================
@@ -703,6 +726,7 @@ def build_default_config():
         'location': {'name': None, 'latitude': None, 'longitude': None},
         'alert': {
             'bark_url': None,
+            'no_sensation_report': False,
             'tiers': {
                 'tier1': {'min': 1.0, 'max': 2.0, 'windows': True, 'bark': True},
                 'tier2': {'min': 2.0, 'max': 3.0, 'windows': True, 'bark': True},
@@ -770,7 +794,7 @@ def get_location_by_ip():
 
 def setup_wizard():
     global SOURCE_CONFIG, FILTER_DETAIL, USER_LOCATION_NAME, USER_LATITUDE, USER_LONGITUDE
-    global ALERT_BARK_URL, ALERT_TIERS, DEBUG, EXPORT_FILE_PATH, EXPORT_ENABLED
+    global ALERT_BARK_URL, ALERT_TIERS, DEBUG, EXPORT_FILE_PATH, EXPORT_ENABLED, NO_SENSATION_REPORT
 
     console.print("\n[bold cyan]========== 交互式配置向导 ==========[/bold cyan]")
     console.print("[dim]请根据提示依次完成配置，直接回车使用默认值[/dim]")
@@ -867,6 +891,12 @@ def setup_wizard():
     debug_answer = Prompt.ask("  开启调试模式？", choices=['y', 'n'], default='n')
     DEBUG = (debug_answer == 'y')
 
+    # ---------- 7.5 无震感地震通报 ----------
+    console.print("\n[bold]--- 无震感地震通报 ---[/bold]")
+    console.print("[dim]烈度为 0 的无感地震是否通过 Windows 弹窗和 Bark 推送进行通报？[/dim]")
+    ns_answer = Prompt.ask("  是否开启无震感地震信息通报？", choices=['y', 'n'], default='n')
+    NO_SENSATION_REPORT = (ns_answer == 'y')
+
     # ---------- 8. 保存 ----------
     save_config()
     console.print("\n[bold green]配置已保存到 config.json[/bold green]")
@@ -886,6 +916,7 @@ def save_config():
         },
         'alert': {
             'bark_url': ALERT_BARK_URL,
+            'no_sensation_report': NO_SENSATION_REPORT,
             'tiers': {k: dict(v) for k, v in ALERT_TIERS.items()}
         }
     }
@@ -908,7 +939,7 @@ def save_config():
 def apply_config(config):
     global SOURCE_CONFIG, FILTER_DETAIL, EXPORT_FILE_PATH, FAN_RECONNECT_DELAY, DEBUG
     global USER_LOCATION_NAME, USER_LATITUDE, USER_LONGITUDE
-    global ALERT_BARK_URL, ALERT_TIERS
+    global ALERT_BARK_URL, ALERT_TIERS, NO_SENSATION_REPORT
     sources_cfg = config.get('sources', {})
     for key, src_cfg in sources_cfg.items():
         if key in SOURCE_CONFIG:
@@ -945,6 +976,7 @@ def apply_config(config):
             console.print(f"[dim][DEBUG] 用户位置: {USER_LOCATION_NAME} ({USER_LATITUDE}, {USER_LONGITUDE})[/dim]")
     alert_cfg = config.get('alert', {})
     ALERT_BARK_URL = alert_cfg.get('bark_url') or None
+    NO_SENSATION_REPORT = alert_cfg.get('no_sensation_report', False)
     ALERT_TIERS = alert_cfg.get('tiers', {})
     if DEBUG:
         console.print(f"[dim][DEBUG] 预警配置: bark_url={'已设置' if ALERT_BARK_URL else '未设置'}, tiers={list(ALERT_TIERS.keys())}[/dim]")
@@ -1079,6 +1111,7 @@ USER_LONGITUDE = None
 # 预警配置
 ALERT_BARK_URL = None
 ALERT_TIERS = {}
+NO_SENSATION_REPORT = False
 BARK_COUNTDOWN_THREADS = {}
 
 # 动态P/S波倒计时管理
@@ -3027,6 +3060,9 @@ def main():
 
     bark_txt = ALERT_BARK_URL if ALERT_BARK_URL else "未设置"
     console.print(f"Bark地址:  {bark_txt}")
+
+    ns_txt = '开启' if NO_SENSATION_REPORT else '关闭'
+    console.print(f"无震感地震通报:  {ns_txt}")
 
     if ALERT_TIERS:
         console.print(f"\n预警分级:")
