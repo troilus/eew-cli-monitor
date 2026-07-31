@@ -694,8 +694,8 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
         if ALERT_BARK_URL:
             send_bark(
                 title="无感地震通报",
-                subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 0",
-                body=f"距离震中 {distance_km:.0f}km，P波传播时间 {p_seconds}秒 | S波传播时间 {s_seconds}秒，信号源: {source_label}",
+                subtitle=f"{title_base} 震级 M{magnitude} 深度 {depth}km ",
+                body=f"距离{distance_km:.0f}km, {loc_name}预估烈度 0，距离震中 {distance_km:.0f}km，P波传播时间 {p_seconds}秒 | S波传播时间 {s_seconds}秒，信号源: {source_label}",
                 level="passive"
             )
     else:
@@ -706,22 +706,22 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
             if tier is None or tier == -1 or tier == 0:
                 send_bark(
                     title=f"{title_base} {s_seconds}秒后到达",
-                    subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
-                    body=f"距离震中 {distance_km:.0f}km，S波预计 {s_seconds}秒后到达，信号源: {source_label}",
+                    subtitle=f"震级 M{magnitude} 深度 {depth}km 距离{distance_km:.0f}km",
+                    body=f" {loc_name}预估烈度 {local_intensity}，距离震中 {distance_km:.0f}km，S波预计 {s_seconds}秒后到达，信号源: {source_label}",
                     level="passive"
                 )
             elif tier == 1:
                 send_bark(
                     title=f"{title_base} {s_seconds}秒后到达",
-                    subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
-                    body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
+                    subtitle=f"震级 M{magnitude} 深度 {depth}km 距离{distance_km:.0f}km",
+                    body=f" {loc_name}预估烈度 {local_intensity}，S波预计 {s_seconds}秒后到达 信号源: {source_label}",
                     level="active"
                 )
             elif tier >= 2:
                 send_bark(
                     title=f"{title_base} {s_seconds}秒后到达",
-                    subtitle=f"震级 M{magnitude} 深度 {depth}km，距离{distance_km:.0f}km, {loc_name}预估烈度 {local_intensity}",
-                    body=f"S波预计 {s_seconds}秒后到达 信号源: {source_label}",
+                    subtitle=f"震级 M{magnitude} 深度 {depth}km 距离{distance_km:.0f}km",
+                    body=f" {loc_name}预估烈度 {local_intensity}，S波预计 {s_seconds}秒后到达 信号源: {source_label}",
                     level="critical",
                     volume=10, call="1", sound="alarm"
                 )
