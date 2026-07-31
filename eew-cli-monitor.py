@@ -1604,7 +1604,7 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True, 
         rows = []
         rows.append(["发震时刻", safe_get(entry, 'time', 'OriginTime')])
         rows.append(["发报时间", safe_get(entry, 'ReportTime', 'report_time')])
-        rows.append(["震中位置", safe_get(entry, 'location', 'placeName', 'Hypocenter')])
+        rows.append(["震中位置", safe_get(entry, 'placeName', 'location', 'Hypocenter')])
         lat = safe_get(entry, 'latitude', 'Latitude')
         lon = safe_get(entry, 'longitude', 'Longitude')
         rows.append(["坐标", f"{lat}, {lon}" if lat and lon else '未知'])
@@ -1620,7 +1620,7 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True, 
             dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
             if dist is not None:
                 mag_val = safe_get(entry, 'magnitude', 'Magunitude')
-                origin_name = safe_get(entry, 'location', 'placeName', 'Hypocenter')
+                origin_name = safe_get(entry, 'placeName', 'location', 'Hypocenter')
                 ot = safe_get(entry, 'time', 'OriginTime')
                 depth_val = safe_get(entry, 'depth', 'Depth')
                 max_int = safe_get(entry, 'intensity', 'MaxIntensity', 'N/A')
