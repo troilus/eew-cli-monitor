@@ -1928,18 +1928,18 @@ def process_eew(data, source_key, default_type=None):
                 return
 
     if source_key == 'fan':
-        source_label = f"{SOURCE_DISPLAY['fan']} ({data_type})"
+        source_label = f"{source_key}.{data_type}"
         process_fan_data(data, data_type, source_label)
         return
     elif source_key == 'p2pjson':
-        source_label = SOURCE_DISPLAY.get(source_key, source_key)
+        source_label = f"{source_key}.{data_type}"
         if data_type == 'jma':
             process_jma_eew(data, source_key, source_label)
         else:
             process_generic_eew(data, source_key, source_label, data_type)
         return
 
-    source_label = SOURCE_DISPLAY.get(source_key, source_key)
+    source_label = f"{source_key}.{data_type}"
 
     if data_type == 'jma':
         process_jma_eew(data, source_key, source_label)
@@ -2653,10 +2653,10 @@ def on_message_factory(source_key):
             if msg_type.endswith('_eew'):
                 data['type'] = msg_type[:-4]
             if data.get('type') == 'cenc_eqlist':
-                process_cenc_eqlist(data, source_key, SOURCE_DISPLAY.get(source_key, source_key))
+                process_cenc_eqlist(data, source_key, f"{source_key}.{data.get('type')}")
                 return
             if data.get('type') == 'jma_eqlist':
-                process_jma_eqlist(data, source_key, SOURCE_DISPLAY.get(source_key, source_key))
+                process_jma_eqlist(data, source_key, f"{source_key}.{data.get('type')}")
                 return
             if 'EventID' in data or 'event_id' in data:
                 process_eew(data, source_key)
@@ -2989,12 +2989,12 @@ def handle_command(cmd):
             try:
                 data = response.json()
                 if data and isinstance(data, dict):
-                    if source_key == 'cenc_eqlist':
-                        process_cenc_eqlist(data, 'wolfx', SOURCE_DISPLAY.get('wolfx', 'Wolfx'),
-                                            send_notification=False, count=count, sound=False)
-                    elif source_key == 'jma_eqlist':
-                        process_jma_eqlist(data, 'wolfx', SOURCE_DISPLAY.get('wolfx', 'Wolfx'),
-                                           send_notification=False, count=count, sound=False)
+                        if source_key == 'cenc_eqlist':
+                            process_cenc_eqlist(data, 'wolfx', f"wolfx.{source_key}",
+                                                send_notification=False, count=count, sound=False)
+                        elif source_key == 'jma_eqlist':
+                            process_jma_eqlist(data, 'wolfx', f"wolfx.{source_key}",
+                                               send_notification=False, count=count, sound=False)
                 else:
                     console.print(f"[red]处理失败 ({source_key}): 返回数据格式异常[/red]")
             except Exception as e:
