@@ -694,7 +694,7 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
         if ALERT_BARK_URL:
             send_bark(
                 title="无感地震通报",
-                subtitle=f"{title_base} 震级 M{magnitude} 深度 {depth}km ",
+                subtitle=f"{origin_name} 震级 M{magnitude} 深度 {depth}km",
                 body=f"距离{distance_km:.0f}km, {loc_name}预估烈度 0，距离震中 {distance_km:.0f}km，P波传播时间 {p_seconds}秒 | S波传播时间 {s_seconds}秒，信号源: {source_label}",
                 level="passive"
             )
