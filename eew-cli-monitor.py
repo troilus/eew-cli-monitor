@@ -815,16 +815,19 @@ def setup_wizard():
 
     # ---------- 1. 位置 ----------
     console.print("\n[bold]--- 位置设置 ---[/bold]")
+    has_loc = USER_LATITUDE is not None and USER_LONGITUDE is not None and bool(USER_LOCATION_NAME)
     ip_lat, ip_lon, ip_city = get_location_by_ip()
-    use_ip = None
-    if ip_lat is not None and ip_lon is not None:
+    use_ip = False
+    if ip_lat is None or ip_lon is None:
+        console.print("[yellow]无法通过 IP 获取位置" + ("" if has_loc else "，请手动输入") + "[/yellow]")
+    elif has_loc:
+        answer = Prompt.ask("  是否从 IP 获取位置？", choices=['y', 'n'], default='n')
+        use_ip = (answer == 'y')
+    else:
         loc_preview = f"{ip_city} ({ip_lat:.4f}, {ip_lon:.4f})" if ip_city else f"({ip_lat:.4f}, {ip_lon:.4f})"
         console.print(f"[green]通过 IP 获取到位置:[/green] {loc_preview}")
         answer = Prompt.ask("  使用这个位置？可以用 https://lbs.qq.com/getPoint/ 获取精确坐标", choices=['y', 'n'], default='y')
         use_ip = (answer == 'y')
-    else:
-        console.print("[yellow]无法通过 IP 获取位置，请手动输入[/yellow]")
-        use_ip = False
 
     if use_ip:
         USER_LATITUDE = ip_lat
