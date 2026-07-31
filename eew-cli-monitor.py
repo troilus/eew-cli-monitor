@@ -335,11 +335,18 @@ def add_location_rows(rows, lat, lon, mag):
             rows.append(["本地烈度(估值)", "无感"])
 
     p_sec, s_sec = calc_wave_arrival(dist)
+    mag_num = None
+    try:
+        mag_num = float(mag)
+    except (TypeError, ValueError):
+        pass
+    is_no_sense = (NO_SENSATION_REPORT and intensity is not None and intensity <= 0
+                   and mag_num is not None and mag_num >= NO_SENSATION_MAG_THRESHOLD)
     if p_sec is not None:
-        p_label = "P波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0 and mag >= NO_SENSATION_MAG_THRESHOLD) else "P波到达"
+        p_label = "P波传播时间" if is_no_sense else "P波到达"
         rows.append([p_label, f"{p_sec}秒"])
     if s_sec is not None:
-        s_label = "S波传播时间" if (NO_SENSATION_REPORT and intensity is not None and intensity <= 0 and mag >= NO_SENSATION_MAG_THRESHOLD) else "S波到达"
+        s_label = "S波传播时间" if is_no_sense else "S波到达"
         rows.append([s_label, f"{s_sec}秒"])
 
     show_epicenter_map(lat, lon, mag)
@@ -657,7 +664,13 @@ def trigger_alert(source_label, origin_name, magnitude, depth,
         _restore_volume()
 
     # Windows通知
-    no_sense = (local_intensity is not None and local_intensity == 0 and magnitude >= NO_SENSATION_MAG_THRESHOLD)
+    mag_num = None
+    try:
+        mag_num = float(magnitude)
+    except (TypeError, ValueError):
+        pass
+    no_sense = (local_intensity is not None and local_intensity == 0
+                and mag_num is not None and mag_num >= NO_SENSATION_MAG_THRESHOLD)
     if no_sense and not NO_SENSATION_REPORT:
         pass
     elif no_sense and NO_SENSATION_REPORT:
@@ -1058,7 +1071,8 @@ HTTP_URLS = {
     'sc': 'https://api.wolfx.jp/sc_eew.json',
     'fj': 'https://api.wolfx.jp/fj_eew.json',
     'cq': 'https://api.wolfx.jp/cq_eew.json',
-    'cenc_eqlist': 'https://api.wolfx.jp/cenc_eqlist.json'
+    'cenc_eqlist': 'https://api.wolfx.jp/cenc_eqlist.json',
+    'jma_eqlist': 'https://api.wolfx.jp/jma_eqlist.json'
 }
 
 FAN_SUBTYPES = [
@@ -1079,7 +1093,8 @@ FILTER_DETAIL = {
         'sc': True,
         'fj': True,
         'cq': True,
-        'cenc_eqlist': True
+        'cenc_eqlist': True,
+        'jma_eqlist': False
     },
     'p2p': {
         'jma': False
@@ -1572,7 +1587,7 @@ def process_cq_eew(data, source_key, source_label):
             start_countdown(f"cq_{event_id}", ot, dist, USER_LOCATION_NAME, mag_val, origin_name)
 
 
-def process_cenc_eqlist(data, source_key, source_label, send_notification=True):
+def process_cenc_eqlist(data, source_key, source_label, send_notification=True, count=3, sound=True):
     entries = []
     if any(k.startswith('No') for k in data):
         for key in sorted(data.keys(), key=lambda k: int(k[2:]) if k[2:].isdigit() else 0):
@@ -1581,7 +1596,7 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True):
                 entries.append(entry)
     else:
         entries = [data]
-    for entry in entries[:3]:
+    for entry in entries[:count]:
         event_id = safe_get(entry, 'EventID', 'event_id', 'id', default='')
         if not event_id or event_id in processed_events:
             continue
@@ -1599,7 +1614,8 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True):
         rows.append(["最大烈度", safe_get(entry, 'intensity', 'MaxIntensity', 'N/A')])
         rows.append(["信息类型", safe_get(entry, 'type', 'N/A')])
         print_earthquake_table("地震信息 (中国地震台网 CENC 目录)", rows, source_label)
-        play_sound(SOUND_ALERT)
+        if sound:
+            play_sound(SOUND_ALERT)
         if send_notification:
             dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
             if dist is not None:
@@ -1614,6 +1630,55 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True):
                               local_int, max_int, ot, p_sec, s_sec, event_id)
                 if local_int and local_int > 0:
                     start_countdown(f"cenc_eqlist_{event_id}", ot, dist, USER_LOCATION_NAME, mag_val, origin_name)
+
+
+def process_jma_eqlist(data, source_key, source_label, send_notification=True, count=3, sound=True):
+    entries = []
+    if any(k.startswith('No') for k in data):
+        for key in sorted(data.keys(), key=lambda k: int(k[2:]) if k[2:].isdigit() else 0):
+            entry = data[key]
+            if isinstance(entry, dict):
+                entries.append(entry)
+    else:
+        entries = [data]
+    for entry in entries[:count]:
+        event_id = safe_get(entry, 'EventID', 'event_id', 'id', default='')
+        if not event_id or event_id in processed_events:
+            continue
+        processed_events.add(event_id)
+        lat = safe_get(entry, 'latitude', 'Latitude')
+        lon = safe_get(entry, 'longitude', 'Longitude')
+        depth_raw = safe_get(entry, 'depth', default='')
+        depth_val = depth_raw
+        if isinstance(depth_raw, str) and depth_raw.endswith('km'):
+            depth_val = depth_raw[:-2].strip()
+        rows = []
+        rows.append(["发震时刻", safe_get(entry, 'time_full', 'time', 'OriginTime')])
+        rows.append(["震中位置", safe_get(entry, 'location', 'placeName', 'Hypocenter')])
+        rows.append(["坐标", f"{lat}, {lon}" if lat and lon else '未知'])
+        add_location_rows(rows, lat, lon, safe_get(entry, 'magnitude', 'Magunitude'))
+        rows.append(["震级(M)", safe_get(entry, 'magnitude', 'Magunitude')])
+        rows.append(["深度(km)", depth_val])
+        rows.append(["最大震度(日本)", safe_get(entry, 'shindo', 'MaxIntensity', 'N/A')])
+        info = safe_get(entry, 'info', default='')
+        if info:
+            rows.append(["附注", info])
+        print_earthquake_table("地震信息 (日本气象厅 JMA 目录)", rows, source_label)
+        if sound:
+            play_sound(SOUND_ALERT)
+        if send_notification:
+            dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
+            if dist is not None:
+                mag_val = safe_get(entry, 'magnitude', 'Magunitude')
+                origin_name = safe_get(entry, 'location', 'placeName', 'Hypocenter')
+                ot = safe_get(entry, 'time_full', 'time', 'OriginTime')
+                max_int = safe_get(entry, 'shindo', 'MaxIntensity', 'N/A')
+                p_sec, s_sec = calc_wave_arrival(dist)
+                local_int = estimate_local_intensity(mag_val, dist)
+                trigger_alert(source_label, origin_name, mag_val, depth_val, dist,
+                              local_int, max_int, ot, p_sec, s_sec, event_id)
+                if local_int and local_int > 0:
+                    start_countdown(f"jma_eqlist_{event_id}", ot, dist, USER_LOCATION_NAME, mag_val, origin_name)
 
 
 def process_cea_eew(data, source_key, source_label):
@@ -2154,53 +2219,6 @@ def process_weather_warning(data, source_key):
         console.print(f"[red]气象预警解析错误: {e}[/red]")
 
 
-# ---------- 快照 ----------
-def fetch_initial_snapshots():
-    console.print("[dim]正在获取启动快照...[/dim]")
-    if SOURCE_CONFIG.get('wolfx', {}).get('enabled', False):
-        for source_key, enabled in FILTER_DETAIL.get('wolfx', {}).items():
-            if not enabled:
-                continue
-            url = HTTP_URLS.get(source_key)
-            if not url:
-                continue
-            if DEBUG:
-                console.print(f"[dim][DEBUG] HTTP GET {url}[/dim]")
-            try:
-                response = requests.get(url, timeout=5)
-                if DEBUG:
-                    console.print(f"[dim][DEBUG] HTTP GET {url} -> {response.status_code}[/dim]")
-                if response.status_code == 200:
-                    data = response.json()
-                    if data and isinstance(data, dict) and ('EventID' in data or 'event_id' in data):
-                        data['type'] = source_key
-                        process_eew(data, 'wolfx')
-            except Exception as e:
-                if DEBUG:
-                    console.print(f"[dim][DEBUG] HTTP GET {url} 失败: {e}[/dim]")
-
-    if SOURCE_CONFIG.get('p2pjson', {}).get('enabled', False):
-        if DEBUG:
-            console.print(f"[dim][DEBUG] HTTP GET P2P history (551)[/dim]")
-        try:
-            p2pjson_url = "https://api.p2pquake.net/v2/history?codes=551&limit=3"
-            response = requests.get(p2pjson_url, timeout=5)
-            if DEBUG:
-                console.print(f"[dim][DEBUG] HTTP GET P2P history -> {response.status_code}[/dim]")
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    if DEBUG:
-                        console.print(f"[dim][DEBUG] P2P history 返回 {len(data)} 条[/dim]")
-                    for quake in data[:3]:
-                        process_p2p_quake(quake)
-        except Exception as e:
-            if DEBUG:
-                console.print(f"[dim][DEBUG] P2P history 请求失败: {e}[/dim]")
-
-    console.print("[dim]快照获取完成。[/dim]")
-
-
 def scale_to_jma(scale_code):
     scale_map = {
         -1: "不明",
@@ -2637,6 +2655,9 @@ def on_message_factory(source_key):
             if data.get('type') == 'cenc_eqlist':
                 process_cenc_eqlist(data, source_key, SOURCE_DISPLAY.get(source_key, source_key))
                 return
+            if data.get('type') == 'jma_eqlist':
+                process_jma_eqlist(data, source_key, SOURCE_DISPLAY.get(source_key, source_key))
+                return
             if 'EventID' in data or 'event_id' in data:
                 process_eew(data, source_key)
         except json.JSONDecodeError:
@@ -2766,7 +2787,7 @@ def handle_command(cmd):
         console.print("  setup                         - 运行交互式配置向导")
         console.print("  status                        - 查看所有数据源状态")
         console.print("  map [world]                   - 显示ASCII地图 (默认中国, map world 显示世界)")
-        console.print("  list                          - 获取并显示中国地震台网地震目录 (cenc_eqlist)")
+        console.print("  list [n]                      - 获取并显示已启用的地震目录源 (cenc_eqlist/jma_eqlist)，n 为条数(默认3)")
         console.print("  help                          - 显示此帮助")
         console.print("[dim]快捷键: Ctrl+C 退出[/dim]")
         return
@@ -2940,21 +2961,44 @@ def handle_command(cmd):
         return
 
     elif parts[0] == 'list':
-        try:
-            url = HTTP_URLS.get('cenc_eqlist')
+        count = 3
+        if len(parts) > 1:
+            try:
+                count = max(1, int(parts[1]))
+            except ValueError:
+                console.print(f"[yellow]无效条数: {parts[1]}，使用默认 3 条[/yellow]")
+        list_sources = ('cenc_eqlist', 'jma_eqlist')
+        enabled_sources = [k for k, en in FILTER_DETAIL.get('wolfx', {}).items()
+                           if en and k in list_sources and HTTP_URLS.get(k)]
+        if not enabled_sources:
+            console.print("[yellow]没有已启用的目录源 (cenc_eqlist/jma_eqlist)，请用 setup 或 enable wolfx/cenc_eqlist 开启[/yellow]")
+            return
+        for source_key in enabled_sources:
+            url = HTTP_URLS.get(source_key)
             if not url:
-                console.print("[yellow]cenc_eqlist URL 未配置[/yellow]")
-                return
-            console.print("[cyan]正在获取中国地震台网地震目录...[/cyan]")
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
+                continue
+            console.print(f"[cyan]正在获取 {SOURCE_DISPLAY.get(source_key, source_key)} 地震目录 (最近 {count} 条)...[/cyan]")
+            try:
+                response = requests.get(url, timeout=5)
+            except Exception as e:
+                console.print(f"[red]请求失败 ({source_key}): {e}[/red]")
+                continue
+            if response.status_code != 200:
+                console.print(f"[red]请求失败 ({source_key}): HTTP {response.status_code}[/red]")
+                continue
+            try:
                 data = response.json()
                 if data and isinstance(data, dict):
-                    process_cenc_eqlist(data, 'wolfx', SOURCE_DISPLAY.get('wolfx', 'Wolfx'), send_notification=False)
-            else:
-                console.print(f"[red]请求失败: HTTP {response.status_code}[/red]")
-        except Exception as e:
-            console.print(f"[red]获取失败: {e}[/red]")
+                    if source_key == 'cenc_eqlist':
+                        process_cenc_eqlist(data, 'wolfx', SOURCE_DISPLAY.get('wolfx', 'Wolfx'),
+                                            send_notification=False, count=count, sound=False)
+                    elif source_key == 'jma_eqlist':
+                        process_jma_eqlist(data, 'wolfx', SOURCE_DISPLAY.get('wolfx', 'Wolfx'),
+                                           send_notification=False, count=count, sound=False)
+                else:
+                    console.print(f"[red]处理失败 ({source_key}): 返回数据格式异常[/red]")
+            except Exception as e:
+                console.print(f"[red]处理失败 ({source_key}): {e}[/red]")
         return
 
     elif parts[0] == 'setup':

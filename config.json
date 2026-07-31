@@ -1,9 +1,4 @@
 {
-  "location": {
-    "name": "成都理工",
-    "latitude": 30.673352,
-    "longitude": 104.14126
-  },
   "sources": {
     "wolfx": {
       "enabled": true,
@@ -23,7 +18,7 @@
       "fallback_urls": []
     },
     "fan": {
-      "enabled": false,
+      "enabled": true,
       "url": "wss://ws.fanstudio.tech/all",
       "fallback_urls": [
         "wss://ws.fanstudio.hk/all"
@@ -37,7 +32,8 @@
       "sc": true,
       "fj": true,
       "cq": true,
-      "cenc_eqlist": false
+      "cenc_eqlist": true,
+      "jma_eqlist": false
     },
     "p2p": {
       "jma": false
@@ -45,18 +41,18 @@
     "p2pjson": {},
     "nied": {},
     "fan": {
-      "cea": false,
-      "cwa-eew": false,
+      "cea": true,
+      "cwa-eew": true,
       "jma": false,
-      "cenc": false,
-      "cwa": false,
-      "cea-pr": false,
-      "ningxia": false,
-      "guangxi": false,
-      "shanxi": false,
-      "beijing": false,
-      "yunnan": false,
-      "hko": false,
+      "cenc": true,
+      "cwa": true,
+      "cea-pr": true,
+      "ningxia": true,
+      "guangxi": true,
+      "shanxi": true,
+      "beijing": true,
+      "yunnan": true,
+      "hko": true,
       "usgs": false,
       "sa": false,
       "emsc": false,
@@ -65,19 +61,40 @@
       "usp": false,
       "kma": false,
       "kma-eew": false,
-      "fssn": false,
-      "fssn-cmt": false
-    }
-  },
-  "alert": {
-    "bark_url": "https://api.day.app/ChAnChAngEMegEMe/",
-    "tiers": {
-    "tier1": { "min": 1.0, "max": 2.0 },
-    "tier2": { "min": 2.0, "max": 3.0 },
-    "tier3": { "min": 3.0 }
-
+      "fssn": true,
+      "fssn-cmt": true
     }
   },
   "export_path": null,
-  "debug": true
+  "debug": true,
+  "location": {
+    "name": "Jinan",
+    "latitude": 36.6683,
+    "longitude": 117.021
+  },
+  "alert": {
+    "bark_url": "https://api.day.app/ChAnChAngEMegEMe/",
+    "no_sensation_report": true,
+    "no_sensation_mag_threshold": 4.5,
+    "tiers": {
+      "tier1": {
+        "min": 1.0,
+        "max": 2.0,
+        "windows": true,
+        "bark": true
+      },
+      "tier2": {
+        "min": 2.0,
+        "max": 3.0,
+        "windows": true,
+        "bark": true
+      },
+      "tier3": {
+        "min": 3.0,
+        "max": 12.0,
+        "windows": true,
+        "bark": true
+      }
+    }
+  }
 }
