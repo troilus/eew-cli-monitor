@@ -1259,6 +1259,54 @@ def print_earthquake_table(title, rows, source_label):
     console.print(table)
     write_table_to_csv(title, rows_with_src)
 
+
+def _intensity_bg(v):
+    if v is None or v < 0.5:
+        return None
+    if v <= 1.5:
+        return "light_cyan"
+    if v <= 2.5:
+        return "green"
+    if v <= 3.5:
+        return "yellow"
+    if v <= 4.5:
+        return "dark_orange"
+    if v <= 5.5:
+        return "red"
+    if v <= 6.5:
+        return "magenta"
+    return "bright_magenta"
+
+
+def _normalize_ts(raw):
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return s
+
+
+def print_eqlist_compact(items, title):
+    if not items:
+        return
+    table = Table(title=title, box=box.ROUNDED, border_style="bold yellow")
+    table.add_column("烈度", justify="center", vertical="middle", no_wrap=True, width=4)
+    table.add_column("信息", no_wrap=False, width=42)
+    for local_int, lines in items:
+        if local_int is None:
+            cell = Text("-", style="white on grey23")
+        elif local_int <= 0:
+            cell = Text("0", style="white on grey23")
+        else:
+            bg = _intensity_bg(local_int) or "grey23"
+            cell = Text(str(int(round(local_int))), style=f"white on {bg}")
+        table.add_row(cell, Text("\n".join(lines)))
+    console.print(table)
+
 def print_weather_table(title, rows, source_label):
     if not rows:
         return
@@ -1587,7 +1635,7 @@ def process_cq_eew(data, source_key, source_label):
             start_countdown(f"cq_{event_id}", ot, dist, USER_LOCATION_NAME, mag_val, origin_name)
 
 
-def process_cenc_eqlist(data, source_key, source_label, send_notification=True, count=3, sound=True):
+def process_cenc_eqlist(data, source_key, source_label, send_notification=True, count=3, sound=True, compact=False):
     entries = []
     if any(k.startswith('No') for k in data):
         for key in sorted(data.keys(), key=lambda k: int(k[2:]) if k[2:].isdigit() else 0):
@@ -1596,30 +1644,41 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True, 
                 entries.append(entry)
     else:
         entries = [data]
+    compact_items = []
     for entry in entries[:count]:
         event_id = safe_get(entry, 'EventID', 'event_id', 'id', default='')
         if not event_id or event_id in processed_events:
             continue
         processed_events.add(event_id)
-        rows = []
-        rows.append(["发震时刻", safe_get(entry, 'time', 'OriginTime')])
-        rows.append(["发报时间", safe_get(entry, 'ReportTime', 'report_time')])
-        rows.append(["震中位置", safe_get(entry, 'placeName', 'location', 'Hypocenter')])
         lat = safe_get(entry, 'latitude', 'Latitude')
         lon = safe_get(entry, 'longitude', 'Longitude')
-        rows.append(["坐标", f"{lat}, {lon}" if lat and lon else '未知'])
-        add_location_rows(rows, lat, lon, safe_get(entry, 'magnitude', 'Magunitude'))
-        rows.append(["震级(M)", safe_get(entry, 'magnitude', 'Magunitude')])
-        rows.append(["深度(km)", safe_get(entry, 'depth', 'Depth')])
-        rows.append(["最大烈度", safe_get(entry, 'intensity', 'MaxIntensity', 'N/A')])
-        rows.append(["信息类型", safe_get(entry, 'type', 'N/A')])
-        print_earthquake_table("地震信息 (中国地震台网 CENC 目录)", rows, source_label)
+        mag_val = safe_get(entry, 'magnitude', 'Magunitude')
+        dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
+        if compact:
+            local_int = estimate_local_intensity(mag_val, dist) if dist is not None else None
+            location = safe_get(entry, 'placeName', 'location', 'Hypocenter')
+            t = _normalize_ts(safe_get(entry, 'time', 'OriginTime'))
+            meta = f"M{mag_val}"
+            if dist is not None:
+                meta += f" {dist:.0f}km"
+            meta += f"  CENC/Wolfx"
+            compact_items.append((local_int, [location, f"{t}(+8)", meta]))
+        else:
+            rows = []
+            rows.append(["发震时刻", safe_get(entry, 'time', 'OriginTime')])
+            rows.append(["发报时间", safe_get(entry, 'ReportTime', 'report_time')])
+            rows.append(["震中位置", safe_get(entry, 'placeName', 'location', 'Hypocenter')])
+            rows.append(["坐标", f"{lat}, {lon}" if lat and lon else '未知'])
+            add_location_rows(rows, lat, lon, mag_val)
+            rows.append(["震级(M)", mag_val])
+            rows.append(["深度(km)", safe_get(entry, 'depth', 'Depth')])
+            rows.append(["最大烈度", safe_get(entry, 'intensity', 'MaxIntensity', 'N/A')])
+            rows.append(["信息类型", safe_get(entry, 'type', 'N/A')])
+            print_earthquake_table("地震信息 (中国地震台网 CENC 目录)", rows, source_label)
         if sound:
             play_sound(SOUND_ALERT)
         if send_notification:
-            dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
             if dist is not None:
-                mag_val = safe_get(entry, 'magnitude', 'Magunitude')
                 origin_name = safe_get(entry, 'placeName', 'location', 'Hypocenter')
                 ot = safe_get(entry, 'time', 'OriginTime')
                 depth_val = safe_get(entry, 'depth', 'Depth')
@@ -1630,9 +1689,11 @@ def process_cenc_eqlist(data, source_key, source_label, send_notification=True, 
                               local_int, max_int, ot, p_sec, s_sec, event_id)
                 if local_int and local_int > 0:
                     start_countdown(f"cenc_eqlist_{event_id}", ot, dist, USER_LOCATION_NAME, mag_val, origin_name)
+    if compact and compact_items:
+        print_eqlist_compact(compact_items, "地震目录 (中国地震台网 CENC)")
 
 
-def process_jma_eqlist(data, source_key, source_label, send_notification=True, count=3, sound=True):
+def process_jma_eqlist(data, source_key, source_label, send_notification=True, count=3, sound=True, compact=False):
     entries = []
     if any(k.startswith('No') for k in data):
         for key in sorted(data.keys(), key=lambda k: int(k[2:]) if k[2:].isdigit() else 0):
@@ -1641,6 +1702,7 @@ def process_jma_eqlist(data, source_key, source_label, send_notification=True, c
                 entries.append(entry)
     else:
         entries = [data]
+    compact_items = []
     for entry in entries[:count]:
         event_id = safe_get(entry, 'EventID', 'event_id', 'id', default='')
         if not event_id or event_id in processed_events:
@@ -1648,30 +1710,44 @@ def process_jma_eqlist(data, source_key, source_label, send_notification=True, c
         processed_events.add(event_id)
         lat = safe_get(entry, 'latitude', 'Latitude')
         lon = safe_get(entry, 'longitude', 'Longitude')
-        depth_raw = safe_get(entry, 'depth', default='')
-        depth_val = depth_raw
-        if isinstance(depth_raw, str) and depth_raw.endswith('km'):
-            depth_val = depth_raw[:-2].strip()
-        rows = []
-        rows.append(["发震时刻", safe_get(entry, 'time_full', 'time', 'OriginTime')])
-        rows.append(["震中位置", safe_get(entry, 'location', 'placeName', 'Hypocenter')])
-        rows.append(["坐标", f"{lat}, {lon}" if lat and lon else '未知'])
-        add_location_rows(rows, lat, lon, safe_get(entry, 'magnitude', 'Magunitude'))
-        rows.append(["震级(M)", safe_get(entry, 'magnitude', 'Magunitude')])
-        rows.append(["深度(km)", depth_val])
-        rows.append(["最大震度(日本)", safe_get(entry, 'shindo', 'MaxIntensity', 'N/A')])
-        info = safe_get(entry, 'info', default='')
-        if info:
-            rows.append(["附注", info])
-        print_earthquake_table("地震信息 (日本气象厅 JMA 目录)", rows, source_label)
+        mag_val = safe_get(entry, 'magnitude', 'Magunitude')
+        dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
+        if compact:
+            local_int = estimate_local_intensity(mag_val, dist) if dist is not None else None
+            location = safe_get(entry, 'location', 'placeName', 'Hypocenter')
+            t = _normalize_ts(safe_get(entry, 'time_full', 'time', 'OriginTime'))
+            meta = f"M{mag_val}"
+            if dist is not None:
+                meta += f" {dist:.0f}km"
+            meta += f"  JMA/Wolfx"
+            compact_items.append((local_int, [location, f"{t}(+9)", meta]))
+        else:
+            depth_raw = safe_get(entry, 'depth', default='')
+            depth_val = depth_raw
+            if isinstance(depth_raw, str) and depth_raw.endswith('km'):
+                depth_val = depth_raw[:-2].strip()
+            rows = []
+            rows.append(["发震时刻", safe_get(entry, 'time_full', 'time', 'OriginTime')])
+            rows.append(["震中位置", safe_get(entry, 'location', 'placeName', 'Hypocenter')])
+            rows.append(["坐标", f"{lat}, {lon}" if lat and lon else '未知'])
+            add_location_rows(rows, lat, lon, mag_val)
+            rows.append(["震级(M)", mag_val])
+            rows.append(["深度(km)", depth_val])
+            rows.append(["最大震度(日本)", safe_get(entry, 'shindo', 'MaxIntensity', 'N/A')])
+            info = safe_get(entry, 'info', default='')
+            if info:
+                rows.append(["附注", info])
+            print_earthquake_table("地震信息 (日本气象厅 JMA 目录)", rows, source_label)
         if sound:
             play_sound(SOUND_ALERT)
         if send_notification:
-            dist = haversine(lat, lon, USER_LATITUDE, USER_LONGITUDE) if lat and lon and USER_LATITUDE else None
             if dist is not None:
-                mag_val = safe_get(entry, 'magnitude', 'Magunitude')
                 origin_name = safe_get(entry, 'location', 'placeName', 'Hypocenter')
                 ot = safe_get(entry, 'time_full', 'time', 'OriginTime')
+                depth_raw = safe_get(entry, 'depth', default='')
+                depth_val = depth_raw
+                if isinstance(depth_raw, str) and depth_raw.endswith('km'):
+                    depth_val = depth_raw[:-2].strip()
                 max_int = safe_get(entry, 'shindo', 'MaxIntensity', 'N/A')
                 p_sec, s_sec = calc_wave_arrival(dist)
                 local_int = estimate_local_intensity(mag_val, dist)
@@ -1679,6 +1755,8 @@ def process_jma_eqlist(data, source_key, source_label, send_notification=True, c
                               local_int, max_int, ot, p_sec, s_sec, event_id)
                 if local_int and local_int > 0:
                     start_countdown(f"jma_eqlist_{event_id}", ot, dist, USER_LOCATION_NAME, mag_val, origin_name)
+    if compact and compact_items:
+        print_eqlist_compact(compact_items, "地震目录 (日本气象厅 JMA)")
 
 
 def process_cea_eew(data, source_key, source_label):
@@ -2966,10 +3044,10 @@ def handle_command(cmd):
                 if data and isinstance(data, dict):
                         if source_key == 'cenc_eqlist':
                             process_cenc_eqlist(data, 'wolfx', f"wolfx.{source_key}",
-                                                send_notification=False, count=count, sound=False)
+                                                send_notification=False, count=count, sound=False, compact=True)
                         elif source_key == 'jma_eqlist':
                             process_jma_eqlist(data, 'wolfx', f"wolfx.{source_key}",
-                                               send_notification=False, count=count, sound=False)
+                                               send_notification=False, count=count, sound=False, compact=True)
                 else:
                     console.print(f"[red]处理失败 ({source_key}): 返回数据格式异常[/red]")
             except Exception as e:

@@ -33,7 +33,7 @@
       "fj": true,
       "cq": true,
       "cenc_eqlist": true,
-      "jma_eqlist": false
+      "jma_eqlist": true
     },
     "p2p": {
       "jma": false
@@ -66,7 +66,7 @@
     }
   },
   "export_path": null,
-  "debug": true,
+  "debug": false,
   "location": {
     "name": "Jinan",
     "latitude": 36.6683,
@@ -75,7 +75,7 @@
   "alert": {
     "bark_url": "https://api.day.app/ChAnChAngEMegEMe/",
     "no_sensation_report": true,
-    "no_sensation_mag_threshold": 4.5,
+    "no_sensation_mag_threshold": 0.0,
     "tiers": {
       "tier1": {
         "min": 1.0,
