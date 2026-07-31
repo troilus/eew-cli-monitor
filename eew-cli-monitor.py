@@ -2510,33 +2510,8 @@ def on_fan_message(ws, message):
             console.print(f"[dim]FAN 原始数据: {data}[/dim]")
         msg_type = data.get('type')
         if msg_type == 'initial_all' or msg_type == 'query_response':
-            for sub_key, sub_data in data.items():
-                if sub_key in ('type', 'md5'):
-                    continue
-                if isinstance(sub_data, dict) and 'Data' in sub_data:
-                    if sub_key == 'weatheralarm':
-                        # 处理气象预警
-                        item_data = sub_data.get('Data')
-                        if item_data and isinstance(item_data, dict):
-                            process_weather_warning(item_data, 'fan')
-                        continue
-                    if sub_key == 'tsunami':
-                        item_data = sub_data.get('Data')
-                        if item_data and isinstance(item_data, dict):
-                            process_tsunami(item_data, source_label='FAN Studio (tsunami)')
-                        continue
-                    if sub_key in FILTER_DETAIL.get('fan', {}):
-                        if not FILTER_DETAIL['fan'][sub_key]:
-                            if DEBUG:
-                                console.print(f"[dim]FAN 子源 {sub_key} 已禁用，跳过[/dim]")
-                            continue
-                    item_data = sub_data['Data']
-                    if item_data and isinstance(item_data, dict):
-                        mapped_data = {
-                            "type": sub_key,
-                            **item_data
-                        }
-                        process_eew(mapped_data, 'fan')
+            if DEBUG:
+                console.print(f"[dim]FAN 快照消息 {msg_type} 已忽略，仅处理实时更新[/dim]")
         elif msg_type == 'update':
             source = data.get('source')
             if source:
