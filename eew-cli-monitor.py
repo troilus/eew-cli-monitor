@@ -1029,7 +1029,7 @@ SOURCE_CONFIG = {
     'fan': {
         'name': 'FAN Studio (地震)',
         'url': 'wss://ws.fanstudio.tech/all',
-        'enabled': False,
+        'enabled': True,
         'type': 'all',
         'need_subscribe': False,
         'fallback_urls': ['wss://ws.fanstudio.hk/all']
@@ -1079,18 +1079,18 @@ FILTER_DETAIL = {
     'p2pjson': {},
     'nied': {},
     'fan': {
-        'cea': False,
-        'cwa-eew': False,
+        'cea': True,
+        'cwa-eew': True,
         'jma': False,
         'cenc': True,
-        'cwa': False,
-        'cea-pr': False,
+        'cwa': True,
+        'cea-pr': True,
         'ningxia': True,
         'guangxi': True,
         'shanxi': True,
         'beijing': True,
         'yunnan': True,
-        'hko': False,
+        'hko': True,
         'usgs': False,
         'sa': False,
         'emsc': False,
@@ -1100,7 +1100,7 @@ FILTER_DETAIL = {
         'kma': False,
         'kma-eew': False,
         'fssn': True,
-        'fssn-cmt': False,
+        'fssn-cmt': True,
     }
 }
 for sub in FAN_SUBTYPES:
