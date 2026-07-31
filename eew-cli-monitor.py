@@ -2747,6 +2747,12 @@ def on_message_factory(source_key):
                 return
             if msg_type.endswith('_eew'):
                 data['type'] = msg_type[:-4]
+            sub_type = data.get('type')
+            if sub_type in FILTER_DETAIL.get(source_key, {}):
+                if not FILTER_DETAIL[source_key][sub_type]:
+                    if DEBUG:
+                        console.print(f"[dim]{source_key} 子源 {sub_type} 已停用，跳过消息[/dim]")
+                    return
             if data.get('type') == 'cenc_eqlist':
                 process_cenc_eqlist(data, source_key, f"{source_key}.{data.get('type')}")
                 return
