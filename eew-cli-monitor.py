@@ -867,7 +867,9 @@ def setup_wizard():
         name = cfg.get('name', key)
         default_enabled = 'y' if cfg.get('enabled', False) else 'n'
         url_str = f" ({cfg.get('url', '')})" if 'url' in cfg else ""
-        answer = Prompt.ask(f"  启用 {name} ({key}){url_str}", choices=['y', 'n'], default=default_enabled)
+        remark = SOURCE_REMARKS.get(key)
+        remark_str = f" ({remark})" if remark else ""
+        answer = Prompt.ask(f"  启用 {name} ({key}){remark_str}{url_str}", choices=['y', 'n'], default=default_enabled)
         SOURCE_CONFIG[key]['enabled'] = (answer == 'y')
 
     # ---------- 4. Wolfx 过滤器 ----------
@@ -875,7 +877,9 @@ def setup_wizard():
         console.print("\n[bold]--- Wolfx 过滤器设置 ---[/bold]")
         for sub_key, default_val in FILTER_DETAIL['wolfx'].items():
             default_str = 'y' if default_val else 'n'
-            answer = Prompt.ask(f"  启用 wolfx/{sub_key}", choices=['y', 'n'], default=default_str)
+            remark = SOURCE_REMARKS.get(sub_key)
+            remark_str = f" ({remark})" if remark else ""
+            answer = Prompt.ask(f"  启用 wolfx/{sub_key}{remark_str}", choices=['y', 'n'], default=default_str)
             FILTER_DETAIL['wolfx'][sub_key] = (answer == 'y')
 
     # ---------- 5. FAN 过滤器 ----------
@@ -884,7 +888,9 @@ def setup_wizard():
         for sub_key in FILTER_DETAIL['fan']:
             default_val = FILTER_DETAIL['fan'][sub_key]
             default_str = 'y' if default_val else 'n'
-            answer = Prompt.ask(f"  启用 fan/{sub_key}", choices=['y', 'n'], default=default_str)
+            remark = SOURCE_REMARKS.get(sub_key)
+            remark_str = f" ({remark})" if remark else ""
+            answer = Prompt.ask(f"  启用 fan/{sub_key}{remark_str}", choices=['y', 'n'], default=default_str)
             FILTER_DETAIL['fan'][sub_key] = (answer == 'y')
 
     # ---------- 6. 预警分级 ----------
@@ -1064,6 +1070,41 @@ SOURCE_DISPLAY = {
     'p2pjson': 'P2PQuake (JSON API)',
     'nied': 'NIED',
     'fan': 'FAN Studio'
+}
+
+SOURCE_REMARKS = {
+    'wolfx': '日本Wolfx数据聚合',
+    'p2p': 'P2PQuake EPSP',
+    'p2pjson': 'P2PQuake官方JSON API',
+    'nied': '日本防灾科学技术研究所',
+    'fan': '多机构聚合',
+    'jma': '日本气象厅',
+    'cenc': '中国地震台网中心',
+    'sc': '四川省地震局',
+    'fj': '福建省地震局',
+    'cq': '重庆市地震局',
+    'cenc_eqlist': '中国地震台网中心(目录)',
+    'jma_eqlist': '日本气象厅(目录)',
+    'cea': '中国地震预警网',
+    'cea-pr': '中国地震预警网省级网地震预警',
+    'cwa-eew': '台湾气象署地震预警',
+    'cwa': '台湾气象署地震报告',
+    'hko': '香港天文台地震信息',
+    'usgs': '美国地质调查局',
+    'sa': '美国ShakeAlert地震预警',
+    'emsc': '欧洲地中海地震中心地震信息',
+    'bcsf': '法国中央地震研究所地震信息',
+    'gfz': '德国地学研究中心地震信息',
+    'usp': '巴西圣保罗大学地震信息',
+    'kma': '韩国气象厅地震信息',
+    'kma-eew': '韩国气象厅地震预警',
+    'fssn': 'FSSN地震信息',
+    'fssn-cmt': 'FSSN矩心矩张量解(CMT)',
+    'ningxia': '宁夏自治区地震局地震信息',
+    'guangxi': '广西壮族自治区地震局地震信息',
+    'shanxi': '山西省地震局地震信息',
+    'beijing': '北京市地震局地震信息',
+    'yunnan': '云南省地震局地震信息',
 }
 
 HTTP_URLS = {
@@ -3063,11 +3104,15 @@ def handle_command(cmd):
         for key, config in SOURCE_CONFIG.items():
             status = "[green]启用[/green]" if config['enabled'] else "[red]停用[/red]"
             conn_status = "[green]已连接[/green]" if ws_status.get(key) == 'connected' else "[yellow]未连接[/yellow]"
-            console.print(f"  {config['name']} ({key}): {status} | {conn_status}")
+            remark = SOURCE_REMARKS.get(key)
+            remark_str = f" ({remark})" if remark else ""
+            console.print(f"  {config['name']} ({key}){remark_str}: {status} | {conn_status}")
             if key in FILTER_DETAIL and FILTER_DETAIL[key]:
                 for sub, enabled in FILTER_DETAIL[key].items():
                     sub_status = "[green]启用[/green]" if enabled else "[red]停用[/red]"
-                    console.print(f"    └─ {sub}: {sub_status}")
+                    sub_remark = SOURCE_REMARKS.get(sub)
+                    sub_str = f" ({sub_remark})" if sub_remark else ""
+                    console.print(f"    └─ {sub}{sub_str}: {sub_status}")
         return
 
     else:
@@ -3204,13 +3249,17 @@ def main():
 
     console.print(f"\n数据源:")
     for key, src_cfg in SOURCE_CONFIG.items():
-        status = '启用' if src_cfg['enabled'] else '禁用'
-        console.print(f"  {src_cfg['name']} ({key}): {status}")
-        if src_cfg['enabled'] and key in FILTER_DETAIL and FILTER_DETAIL[key]:
-            subs = FILTER_DETAIL[key]
-            parts = [f"{sub}{'开' if en else '关'}" for sub, en in subs.items()]
-            if parts:
-                console.print(f"    {' | '.join(parts)}")
+        status = "[green]启用[/green]" if src_cfg['enabled'] else "[red]停用[/red]"
+        conn_status = "[green]已连接[/green]" if ws_status.get(key) == 'connected' else "[yellow]未连接[/yellow]"
+        remark = SOURCE_REMARKS.get(key)
+        remark_str = f" ({remark})" if remark else ""
+        console.print(f"  {src_cfg['name']} ({key}){remark_str}: {status} | {conn_status}")
+        if key in FILTER_DETAIL and FILTER_DETAIL[key]:
+            for sub, enabled in FILTER_DETAIL[key].items():
+                sub_status = "[green]启用[/green]" if enabled else "[red]停用[/red]"
+                sub_remark = SOURCE_REMARKS.get(sub)
+                sub_str = f" ({sub_remark})" if sub_remark else ""
+                console.print(f"    └─ {sub}{sub_str}: {sub_status}")
     console.print(f"[bold]==============================[/bold]\n")
 
     if SOURCE_CONFIG.get('wolfx', {}).get('enabled', False):

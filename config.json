@@ -33,7 +33,7 @@
       "fj": true,
       "cq": true,
       "cenc_eqlist": true,
-      "jma_eqlist": true
+      "jma_eqlist": false
     },
     "p2p": {
       "jma": false
@@ -62,7 +62,7 @@
       "kma": false,
       "kma-eew": false,
       "fssn": true,
-      "fssn-cmt": true
+      "fssn-cmt": false
     }
   },
   "export_path": null,
@@ -75,7 +75,7 @@
   "alert": {
     "bark_url": "https://api.day.app/ChAnChAngEMegEMe/",
     "no_sensation_report": true,
-    "no_sensation_mag_threshold": 0.0,
+    "no_sensation_mag_threshold": 4.5,
     "tiers": {
       "tier1": {
         "min": 1.0,
