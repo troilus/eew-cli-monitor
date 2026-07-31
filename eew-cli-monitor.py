@@ -793,6 +793,19 @@ def get_location_by_ip():
     return None, None, None
 
 
+def _prompt_coord(prompt_text, default, min_val, max_val, label):
+    while True:
+        raw = Prompt.ask(f"  {prompt_text}", default=str(default))
+        try:
+            val = float(raw)
+        except ValueError:
+            console.print(f"[red]输入无效：'{raw}' 不是数字，请重新输入[/red]")
+            continue
+        if min_val <= val <= max_val:
+            return val
+        console.print(f"[red]超出范围：{label} 应在 {min_val} ~ {max_val} 之间，请重新输入[/red]")
+
+
 def setup_wizard():
     global SOURCE_CONFIG, FILTER_DETAIL, USER_LOCATION_NAME, USER_LATITUDE, USER_LONGITUDE
     global ALERT_BARK_URL, ALERT_TIERS, DEBUG, EXPORT_FILE_PATH, EXPORT_ENABLED, NO_SENSATION_REPORT, NO_SENSATION_MAG_THRESHOLD
@@ -820,16 +833,8 @@ def setup_wizard():
     else:
         lat_default = str(USER_LATITUDE) if USER_LATITUDE is not None else (str(ip_lat) if ip_lat is not None else "30.0")
         lon_default = str(USER_LONGITUDE) if USER_LONGITUDE is not None else (str(ip_lon) if ip_lon is not None else "120.0")
-        lat_str = Prompt.ask("  请输入纬度 (latitude)", default=lat_default)
-        lon_str = Prompt.ask("  请输入经度 (longitude)", default=lon_default)
-        try:
-            USER_LATITUDE = float(lat_str)
-        except ValueError:
-            USER_LATITUDE = None
-        try:
-            USER_LONGITUDE = float(lon_str)
-        except ValueError:
-            USER_LONGITUDE = None
+        USER_LATITUDE = _prompt_coord("请输入纬度 (latitude)", lat_default, -90.0, 90.0, "纬度")
+        USER_LONGITUDE = _prompt_coord("请输入经度 (longitude)", lon_default, -180.0, 180.0, "经度")
         USER_LOCATION_NAME = Prompt.ask("  请输入位置名称（如城市名）", default=USER_LOCATION_NAME or "未设置")
 
     # ---------- 2. Bark URL ----------
