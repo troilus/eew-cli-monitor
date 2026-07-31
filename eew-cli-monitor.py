@@ -18,6 +18,7 @@ from rich.table import Table
 from rich import box
 from rich.text import Text
 from rich.prompt import Prompt
+from rich.panel import Panel
 
 from geo import geo_ascii
 
@@ -1294,7 +1295,7 @@ def print_eqlist_compact(items, title):
     if not items:
         return
     table = Table(title=title, box=box.ROUNDED, border_style="bold yellow")
-    table.add_column("烈度", justify="center", vertical="middle", no_wrap=True, width=4)
+    table.add_column("预估烈度", justify="center", vertical="middle", no_wrap=True, width=4)
     table.add_column("信息", no_wrap=False, width=42)
     for local_int, lines in items:
         if local_int is None:
@@ -3149,6 +3150,13 @@ def main():
         console.print("[red]错误: websocket-client 未安装，WebSocket 数据源将不可用[/red]")
 
     console.print("\n[bold yellow]========== EEW-CLI-Monitor ==========[/bold yellow]")
+    console.print(Panel(
+        "本工具是一个非官方项目，与任何国家或地区的政府机构、气象机构或地震相关机构均无隶属或合作关系。本服务提供的信息仅供参考，不能替代官方地震预警、灾害信息、疏散信息或其他官方警报渠道。灾害发生时，请务必以相关官方机构发布的最新信息为准。",
+        title="声明",
+        border_style="yellow",
+        box=box.ROUNDED,
+        expand=False
+    ))
     if not os.path.exists(SOUND_ALERT):
         console.print("[yellow]提示: 普通提示音文件未找到，将无法播放。[/yellow]")
     config, config_found = load_config()
