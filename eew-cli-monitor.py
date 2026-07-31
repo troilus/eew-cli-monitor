@@ -2828,9 +2828,9 @@ def handle_command(cmd):
         console.print("  test2                         - 模拟M6地震（汶川）")
         console.print("  test3                         - 模拟M8地震（汶川）")
         console.print("  test5                         - 模拟M5.1地震（印尼巴布亚）")
-        console.print("  debug [on|off]                - 开启/关闭调试模式")
+        console.print("  debug [on|off]                - 开启/关闭调试模式 (无参数则切换)")
         console.print("  export on/off                 - 开启/关闭表格导出到CSV")
-        console.print("  export path <文件路径>        - 设置导出文件路径（相对路径）")
+        console.print("  export path <文件路径>         - 设置导出文件路径（相对或绝对路径）")
         console.print("  stop <source>                 - 停用数据源 (wolfx/p2p/p2pjson/nied/fan/all)")
         console.print("  stop <source>/<subtype>       - 停用子源 (如 stop fan/cenc)")
         console.print("  stop <source>/all             - 停用该数据源所有子源 (如 stop fan/all)")
@@ -2840,10 +2840,9 @@ def handle_command(cmd):
         console.print("  restart <source>              - 重启数据源 (或 restart all)")
         console.print("  setup                         - 运行交互式配置向导")
         console.print("  status                        - 查看所有数据源状态")
-        console.print("  map [world]                   - 显示ASCII地图 (默认中国, map world 显示世界)")
-        console.print("  list [n]                      - 获取并显示已启用的地震目录源 (cenc_eqlist/jma_eqlist)，n 为条数(默认3)")
+        console.print("  list <n>                      - 获取并显示已启用的地震目录源，n 为条数(默认3)")
         console.print("  help                          - 显示此帮助")
-        console.print("[dim]快捷键: Ctrl+C 退出[/dim]")
+
         return
 
     elif parts[0] == 'test0':
