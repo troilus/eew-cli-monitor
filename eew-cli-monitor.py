@@ -2,7 +2,6 @@ import requests
 import time
 import sys
 import os
-import winsound
 import ctypes
 import random
 import json
@@ -12,6 +11,8 @@ import csv
 import re
 import math
 import subprocess
+import queue
+import platform
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
@@ -22,11 +23,11 @@ from rich.panel import Panel
 
 from geo import geo_ascii
 
-try:
+WINDOWS = (platform.system() == 'Windows')
+
+if WINDOWS:
+    import winsound
     import msvcrt
-    WINDOWS = True
-except ImportError:
-    WINDOWS = False
 
 DEBUG = False
 
@@ -53,143 +54,158 @@ SOUND_EEW1 = resource_path("sounds/EEW1.wav")
 SOUND_EEW2 = resource_path("sounds/EEW2.wav")
 
 
-from ctypes import (
-    Structure, POINTER, byref, cast, c_float, c_void_p, c_long,
-    windll, CFUNCTYPE
-)
-from ctypes.wintypes import DWORD, WORD, BYTE, LPVOID, BOOL
+if WINDOWS:
+    from ctypes import (
+        Structure, POINTER, byref, cast, c_float, c_void_p, c_long,
+        windll, CFUNCTYPE
+    )
+    from ctypes.wintypes import DWORD, WORD, BYTE, LPVOID, BOOL
 
 
-class GUID(Structure):
-    _fields_ = [('Data1', DWORD), ('Data2', WORD), ('Data3', WORD),
-                ('Data4', BYTE * 8)]
+    class GUID(Structure):
+        _fields_ = [('Data1', DWORD), ('Data2', WORD), ('Data3', WORD),
+                    ('Data4', BYTE * 8)]
 
 
-CLSID_MMDeviceEnumerator = GUID(
-    0xBCDE0395, 0xE52F, 0x467C,
-    (BYTE * 8)(0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E))
-IID_IMMDeviceEnumerator = GUID(
-    0xA95664D2, 0x9614, 0x4F35,
-    (BYTE * 8)(0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6))
-IID_IAudioEndpointVolume = GUID(
-    0x5CDF2C82, 0x841E, 0x4546,
-    (BYTE * 8)(0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A))
+    CLSID_MMDeviceEnumerator = GUID(
+        0xBCDE0395, 0xE52F, 0x467C,
+        (BYTE * 8)(0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E))
+    IID_IMMDeviceEnumerator = GUID(
+        0xA95664D2, 0x9614, 0x4F35,
+        (BYTE * 8)(0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6))
+    IID_IAudioEndpointVolume = GUID(
+        0x5CDF2C82, 0x841E, 0x4546,
+        (BYTE * 8)(0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A))
 
 
-QueryInterfaceFunc = CFUNCTYPE(c_long, LPVOID, POINTER(GUID), POINTER(LPVOID))
-ReleaseFunc = CFUNCTYPE(c_void_p, LPVOID)
-GetDefaultAudioEndpointFunc = CFUNCTYPE(c_long, LPVOID, DWORD, DWORD, POINTER(LPVOID))
-ActivateFunc = CFUNCTYPE(c_long, LPVOID, POINTER(GUID), DWORD, POINTER(LPVOID), POINTER(LPVOID))
-GetScalarFunc = CFUNCTYPE(c_long, LPVOID, POINTER(c_float))
-SetScalarFunc = CFUNCTYPE(c_long, LPVOID, c_float, POINTER(GUID))
-GetMuteFunc = CFUNCTYPE(c_long, LPVOID, POINTER(BOOL))
-SetMuteFunc = CFUNCTYPE(c_long, LPVOID, BOOL, POINTER(GUID))
+    QueryInterfaceFunc = CFUNCTYPE(c_long, LPVOID, POINTER(GUID), POINTER(LPVOID))
+    ReleaseFunc = CFUNCTYPE(c_void_p, LPVOID)
+    GetDefaultAudioEndpointFunc = CFUNCTYPE(c_long, LPVOID, DWORD, DWORD, POINTER(LPVOID))
+    ActivateFunc = CFUNCTYPE(c_long, LPVOID, POINTER(GUID), DWORD, POINTER(LPVOID), POINTER(LPVOID))
+    GetScalarFunc = CFUNCTYPE(c_long, LPVOID, POINTER(c_float))
+    SetScalarFunc = CFUNCTYPE(c_long, LPVOID, c_float, POINTER(GUID))
+    GetMuteFunc = CFUNCTYPE(c_long, LPVOID, POINTER(BOOL))
+    SetMuteFunc = CFUNCTYPE(c_long, LPVOID, BOOL, POINTER(GUID))
 
-_SavedVolume = None
-_SavedMuteState = None
-_EndpointVolume = None
+    _SavedVolume = None
+    _SavedMuteState = None
+    _EndpointVolume = None
 
 
-def _init_audio():
-    global _EndpointVolume
-    if _EndpointVolume is not None:
-        return True
-    try:
-        hr = windll.ole32.CoInitializeEx(None, 0)
-        if hr not in (0, 1):
-            return False
+    def _init_audio():
+        global _EndpointVolume
+        if _EndpointVolume is not None:
+            return True
+        try:
+            hr = windll.ole32.CoInitializeEx(None, 0)
+            if hr not in (0, 1):
+                return False
 
-        enum_ptr = LPVOID()
-        hr = windll.ole32.CoCreateInstance(
-            byref(CLSID_MMDeviceEnumerator), None, 1,
-            byref(IID_IMMDeviceEnumerator), byref(enum_ptr))
-        if hr != 0:
-            return False
+            enum_ptr = LPVOID()
+            hr = windll.ole32.CoCreateInstance(
+                byref(CLSID_MMDeviceEnumerator), None, 1,
+                byref(IID_IMMDeviceEnumerator), byref(enum_ptr))
+            if hr != 0:
+                return False
 
-        enum_vtbl = cast(enum_ptr, POINTER(POINTER(c_void_p)))[0]
-        get_default = GetDefaultAudioEndpointFunc(enum_vtbl[4])
-        device_ptr = LPVOID()
-        hr = get_default(enum_ptr, 0, 1, byref(device_ptr))
-        if hr != 0:
-            ReleaseFunc(enum_vtbl[2])(enum_ptr)
-            return False
+            enum_vtbl = cast(enum_ptr, POINTER(POINTER(c_void_p)))[0]
+            get_default = GetDefaultAudioEndpointFunc(enum_vtbl[4])
+            device_ptr = LPVOID()
+            hr = get_default(enum_ptr, 0, 1, byref(device_ptr))
+            if hr != 0:
+                ReleaseFunc(enum_vtbl[2])(enum_ptr)
+                return False
 
-        dev_vtbl = cast(device_ptr, POINTER(POINTER(c_void_p)))[0]
-        activate = ActivateFunc(dev_vtbl[3])
-        epv_ptr = LPVOID()
-        hr = activate(device_ptr, byref(IID_IAudioEndpointVolume), 0, None, byref(epv_ptr))
-        if hr != 0:
+            dev_vtbl = cast(device_ptr, POINTER(POINTER(c_void_p)))[0]
+            activate = ActivateFunc(dev_vtbl[3])
+            epv_ptr = LPVOID()
+            hr = activate(device_ptr, byref(IID_IAudioEndpointVolume), 0, None, byref(epv_ptr))
+            if hr != 0:
+                ReleaseFunc(dev_vtbl[2])(device_ptr)
+                ReleaseFunc(enum_vtbl[2])(enum_ptr)
+                return False
+
             ReleaseFunc(dev_vtbl[2])(device_ptr)
             ReleaseFunc(enum_vtbl[2])(enum_ptr)
+            _EndpointVolume = epv_ptr
+            return True
+        except Exception:
             return False
 
-        ReleaseFunc(dev_vtbl[2])(device_ptr)
-        ReleaseFunc(enum_vtbl[2])(enum_ptr)
-        _EndpointVolume = epv_ptr
-        return True
-    except Exception:
+
+    def _save_volume():
+        global _SavedVolume, _SavedMuteState
+        if not _init_audio():
+            _SavedVolume = _SavedMuteState = None
+            return
+        try:
+            vtbl = cast(_EndpointVolume, POINTER(POINTER(c_void_p)))[0]
+            get_scalar = GetScalarFunc(vtbl[9])
+            vol = c_float()
+            hr = get_scalar(_EndpointVolume, byref(vol))
+            _SavedVolume = vol.value if hr == 0 else None
+            get_mute = GetMuteFunc(vtbl[16])
+            muted = BOOL()
+            hr = get_mute(_EndpointVolume, byref(muted))
+            _SavedMuteState = bool(muted.value) if hr == 0 else None
+        except Exception:
+            _SavedVolume = _SavedMuteState = None
+
+
+    def _set_max_volume():
+        if not _init_audio():
+            return
+        try:
+            vtbl = cast(_EndpointVolume, POINTER(POINTER(c_void_p)))[0]
+            SetScalarFunc(vtbl[7])(_EndpointVolume, 1.0, None)
+
+            # 检查是否静音，如果静音则尝试取消
+            muted = BOOL()
+            GetMuteFunc(vtbl[16])(_EndpointVolume, byref(muted))
+            if muted.value:
+                # Method 1: IAudioEndpointVolume::SetMute
+                SetMuteFunc(vtbl[15])(_EndpointVolume, 0, None)
+
+                # 验证是否取消成功
+                muted2 = BOOL()
+                GetMuteFunc(vtbl[16])(_EndpointVolume, byref(muted2))
+                if muted2.value and DEBUG:
+                    console.print("[dim][DEBUG] 无法取消系统静音（当前音频设备不支持）[/dim]")
+        except Exception:
+            pass
+
+
+    def _restore_volume():
+        global _SavedMuteState
+        if _SavedVolume is None or not _init_audio():
+            return
+        try:
+            vtbl = cast(_EndpointVolume, POINTER(POINTER(c_void_p)))[0]
+            set_scalar = SetScalarFunc(vtbl[7])
+            set_scalar(_EndpointVolume, _SavedVolume, None)
+            if _SavedMuteState is not None:
+                set_mute = SetMuteFunc(vtbl[15])
+                set_mute(_EndpointVolume, BOOL(_SavedMuteState), None)
+        except Exception:
+            pass
+else:
+    def _init_audio():
         return False
 
-
-def _save_volume():
-    global _SavedVolume, _SavedMuteState
-    if not _init_audio():
-        _SavedVolume = _SavedMuteState = None
-        return
-    try:
-        vtbl = cast(_EndpointVolume, POINTER(POINTER(c_void_p)))[0]
-        get_scalar = GetScalarFunc(vtbl[9])
-        vol = c_float()
-        hr = get_scalar(_EndpointVolume, byref(vol))
-        _SavedVolume = vol.value if hr == 0 else None
-        get_mute = GetMuteFunc(vtbl[16])
-        muted = BOOL()
-        hr = get_mute(_EndpointVolume, byref(muted))
-        _SavedMuteState = bool(muted.value) if hr == 0 else None
-    except Exception:
-        _SavedVolume = _SavedMuteState = None
-
-
-def _set_max_volume():
-    if not _init_audio():
-        return
-    try:
-        vtbl = cast(_EndpointVolume, POINTER(POINTER(c_void_p)))[0]
-        SetScalarFunc(vtbl[7])(_EndpointVolume, 1.0, None)
-
-        # 检查是否静音，如果静音则尝试取消
-        muted = BOOL()
-        GetMuteFunc(vtbl[16])(_EndpointVolume, byref(muted))
-        if muted.value:
-            # Method 1: IAudioEndpointVolume::SetMute
-            SetMuteFunc(vtbl[15])(_EndpointVolume, 0, None)
-
-            # 验证是否取消成功
-            muted2 = BOOL()
-            GetMuteFunc(vtbl[16])(_EndpointVolume, byref(muted2))
-            if muted2.value and DEBUG:
-                console.print("[dim][DEBUG] 无法取消系统静音（当前音频设备不支持）[/dim]")
-    except Exception:
+    def _save_volume():
         pass
 
+    def _set_max_volume():
+        pass
 
-def _restore_volume():
-    global _SavedMuteState
-    if _SavedVolume is None or not _init_audio():
-        return
-    try:
-        vtbl = cast(_EndpointVolume, POINTER(POINTER(c_void_p)))[0]
-        set_scalar = SetScalarFunc(vtbl[7])
-        set_scalar(_EndpointVolume, _SavedVolume, None)
-        if _SavedMuteState is not None:
-            set_mute = SetMuteFunc(vtbl[15])
-            set_mute(_EndpointVolume, BOOL(_SavedMuteState), None)
-    except Exception:
+    def _restore_volume():
         pass
 
 
 def play_sound(file_path, sync=False):
     if not os.path.exists(file_path):
+        return
+    if not WINDOWS:
         return
     try:
         flags = winsound.SND_FILENAME | (0 if sync else winsound.SND_ASYNC)
@@ -895,7 +911,7 @@ def setup_wizard():
 
     # ---------- 6. 预警分级 ----------
     console.print("\n[bold]--- 预警分级设置 ---[/bold]")
-    console.print("[dim]按烈度(估值)范围分级，各分级可分别控制 Windows 弹窗和 Bark 推送[/dim]")
+    console.print("[dim]按烈度(估值)范围分级，各分级可分别控制桌面通知和 Bark 推送[/dim]")
     default_tiers = ALERT_TIERS if ALERT_TIERS else {
         'tier1': {'min': 1.0, 'max': 2.0, 'windows': True, 'bark': True},
         'tier2': {'min': 2.0, 'max': 3.0, 'windows': True, 'bark': True},
@@ -911,7 +927,7 @@ def setup_wizard():
             cur = default_tiers.get(key, {})
             min_val = Prompt.ask(f"  {key} 最小烈度", default=str(cur.get('min', 1.0)))
             max_val = Prompt.ask(f"  {key} 最大烈度（留空表示不限制）", default=str(cur.get('max', '')))
-            win = Prompt.ask(f"  {key} 启用 Windows 弹窗", choices=['y', 'n'], default='y' if cur.get('windows', True) else 'n')
+            win = Prompt.ask(f"  {key} 启用桌面通知", choices=['y', 'n'], default='y' if cur.get('windows', True) else 'n')
             bark = Prompt.ask(f"  {key} 启用 Bark 推送", choices=['y', 'n'], default='y' if cur.get('bark', True) else 'n')
             tier_cfg = {'min': float(min_val), 'windows': (win == 'y'), 'bark': (bark == 'y')}
             if max_val.strip():
@@ -925,7 +941,7 @@ def setup_wizard():
 
     # ---------- 7.5 无震感地震通报 ----------
     console.print("\n[bold]--- 无震感地震通报 ---[/bold]")
-    console.print("[dim]烈度为 0 的无感地震是否通过 Windows 弹窗和 Bark 推送进行通报？[/dim]")
+    console.print("[dim]烈度为 0 的无感地震是否通过桌面通知和 Bark 推送进行通报？[/dim]")
     ns_answer = Prompt.ask("  是否开启无震感地震信息通报？", choices=['y', 'n'], default='y' if NO_SENSATION_REPORT else 'n')
     NO_SENSATION_REPORT = (ns_answer == 'y')
     if NO_SENSATION_REPORT:
@@ -3162,34 +3178,53 @@ def run_mock_test5():
     process_eew(data, 'wolfx')
 
 
-def check_user_command():
-    if not WINDOWS:
+_cmd_queue = queue.Queue()
+
+
+def _stdin_reader():
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            break
+        _cmd_queue.put(line.strip().lower())
+
+
+if WINDOWS:
+    def check_user_command():
+        if msvcrt.kbhit():
+            line = []
+            while True:
+                ch = msvcrt.getch()
+                if ch == b'\x03':
+                    raise KeyboardInterrupt
+                if ch == b'\r':
+                    msvcrt.putch(b'\r')
+                    msvcrt.putch(b'\n')
+                    break
+                elif ch == b'\x08':
+                    if line:
+                        line.pop()
+                        msvcrt.putch(b'\x08')
+                        msvcrt.putch(b' ')
+                        msvcrt.putch(b'\x08')
+                else:
+                    if 32 <= ch[0] <= 126:
+                        line.append(ch.decode('ascii'))
+                        msvcrt.putch(ch)
+            raw = ''.join(line).strip()
+            if not raw:
+                return None
+            return raw.lower()
         return None
-    if msvcrt.kbhit():
-        line = []
-        while True:
-            ch = msvcrt.getch()
-            if ch == b'\x03':
-                raise KeyboardInterrupt
-            if ch == b'\r':
-                msvcrt.putch(b'\r')
-                msvcrt.putch(b'\n')
-                break
-            elif ch == b'\x08':
-                if line:
-                    line.pop()
-                    msvcrt.putch(b'\x08')
-                    msvcrt.putch(b' ')
-                    msvcrt.putch(b'\x08')
-            else:
-                if 32 <= ch[0] <= 126:
-                    line.append(ch.decode('ascii'))
-                    msvcrt.putch(ch)
-        raw = ''.join(line).strip()
-        if not raw:
+else:
+    _stdin_thread = threading.Thread(target=_stdin_reader, daemon=True)
+    _stdin_thread.start()
+
+    def check_user_command():
+        try:
+            return _cmd_queue.get_nowait() or None
+        except queue.Empty:
             return None
-        return raw.lower()
-    return None
 
 
 # ================== 主程序 ==================
@@ -3215,14 +3250,13 @@ def main():
         console.print("[yellow]请输入 [bold]setup[/bold] 启动交互式配置向导[/yellow]")
         apply_config(config)
         while True:
-            if WINDOWS:
-                cmd = check_user_command()
-                if cmd:
-                    if cmd == 'setup':
-                        setup_wizard()
-                        break
-                    else:
-                        console.print("[yellow]请先输入 setup 完成配置[/yellow]")
+            cmd = check_user_command()
+            if cmd:
+                if cmd == 'setup':
+                    setup_wizard()
+                    break
+                else:
+                    console.print("[yellow]请先输入 setup 完成配置[/yellow]")
             time.sleep(0.1)
         config, config_found = load_config()
     apply_config(config)
@@ -3295,10 +3329,9 @@ def main():
 
     try:
         while True:
-            if WINDOWS:
-                cmd = check_user_command()
-                if cmd:
-                    handle_command(cmd)
+            cmd = check_user_command()
+            if cmd:
+                handle_command(cmd)
             time.sleep(0.1)
     except KeyboardInterrupt:
         ws_running = False
