@@ -9,9 +9,18 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            separator: ';'
+            binary_suffix: ''
+          - os: ubuntu-latest
+            separator: ':'
+            binary_suffix: '-linux'
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,18 +37,30 @@ jobs:
 
       - name: Extract short commit SHA
         id: vars
-        run: |
-          $sha = "$env:GITHUB_SHA".Substring(0, 5)
-          echo "commit_short=$sha" | Out-File -FilePath $env:GITHUB_ENV -Append
+        run: echo "commit_short=${GITHUB_SHA::5}" >> $GITHUB_ENV
+        shell: bash
 
       - name: Build with PyInstaller
-        run: |
-          pyinstaller --onefile --add-data "sounds;sounds" --name "${{ env.commit_short }}-eew-cli-monitor" eew-cli-monitor.py
+        run: pyinstaller --onefile --add-data "sounds${{ matrix.separator }}sounds" --name "${{ env.commit_short }}-eew-cli-monitor${{ matrix.binary_suffix }}" eew-cli-monitor.py
+        shell: bash
 
-      - name: Prepare release assets
-        run: |
-          New-Item -ItemType Directory -Path release_assets -Force
-          Copy-Item "dist/${{ env.commit_short }}-eew-cli-monitor.exe" -Destination release_assets/
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
