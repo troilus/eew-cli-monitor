@@ -11,7 +11,6 @@ import csv
 import re
 import math
 import subprocess
-import queue
 import platform
 from datetime import datetime
 from rich.console import Console
@@ -3178,17 +3177,6 @@ def run_mock_test5():
     process_eew(data, 'wolfx')
 
 
-_cmd_queue = queue.Queue()
-
-
-def _stdin_reader():
-    while True:
-        line = sys.stdin.readline()
-        if not line:
-            break
-        _cmd_queue.put(line.strip().lower())
-
-
 if WINDOWS:
     def check_user_command():
         if msvcrt.kbhit():
@@ -3217,14 +3205,20 @@ if WINDOWS:
             return raw.lower()
         return None
 else:
-    _stdin_thread = threading.Thread(target=_stdin_reader, daemon=True)
-    _stdin_thread.start()
-
     def check_user_command():
         try:
-            return _cmd_queue.get_nowait() or None
-        except queue.Empty:
+            if not sys.stdin.isatty():
+                return None
+            import select
+            if not select.select([sys.stdin], [], [], 0)[0]:
+                return None
+            line = sys.stdin.readline()
+        except (OSError, ValueError):
             return None
+        if not line:
+            return None
+        raw = line.strip().lower()
+        return raw or None
 
 
 # ================== 主程序 ==================
