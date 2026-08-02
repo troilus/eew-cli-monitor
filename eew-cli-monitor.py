@@ -12,6 +12,7 @@ import re
 import math
 import subprocess
 import platform
+import queue as _queue
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
@@ -3205,25 +3206,46 @@ if WINDOWS:
             return raw.lower()
         return None
 else:
+    _cmd_queue = _queue.Queue()
+    _stdin_suspend = threading.Event()
+    _stdin_suspend.set()
+
+    def _stdin_reader_loop():
+        while True:
+            _stdin_suspend.wait()
+            try:
+                line = sys.stdin.readline()
+            except Exception:
+                line = None
+            if not line:
+                time.sleep(0.2)
+                continue
+            cmd = line.strip().lower()
+            if cmd:
+                _cmd_queue.put(cmd)
+
+    def _start_stdin_reader():
+        threading.Thread(target=_stdin_reader_loop, daemon=True).start()
+
+    def _suspend_stdin_reader():
+        _stdin_suspend.clear()
+
+    def _resume_stdin_reader():
+        _stdin_suspend.set()
+
     def check_user_command():
         try:
-            if not sys.stdin.isatty():
-                return None
-            import select
-            if not select.select([sys.stdin], [], [], 0)[0]:
-                return None
-            line = sys.stdin.readline()
-        except (OSError, ValueError):
+            return _cmd_queue.get_nowait() or None
+        except _queue.Empty:
             return None
-        if not line:
-            return None
-        raw = line.strip().lower()
-        return raw or None
 
 
 # ================== 主程序 ==================
 def main():
     global ws_running, epsp_client, EXPORT_FILE, EXPORT_FILE_PATH
+
+    if not WINDOWS:
+        _start_stdin_reader()
 
     if not WS_AVAILABLE:
         console.print("[red]错误: websocket-client 未安装，WebSocket 数据源将不可用[/red]")
@@ -3247,7 +3269,11 @@ def main():
             cmd = check_user_command()
             if cmd:
                 if cmd == 'setup':
+                    if not WINDOWS:
+                        _suspend_stdin_reader()
                     setup_wizard()
+                    if not WINDOWS:
+                        _resume_stdin_reader()
                     break
                 else:
                     console.print("[yellow]请先输入 setup 完成配置[/yellow]")
@@ -3325,6 +3351,7 @@ def main():
         while True:
             cmd = check_user_command()
             if cmd:
+                console.print(f"[dim][DEBUG] 已收到命令: {cmd}[/dim]")
                 handle_command(cmd)
             time.sleep(0.1)
     except KeyboardInterrupt:
